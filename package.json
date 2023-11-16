@@ -1,11 +1,11 @@
 {
-  "name": "@aux4/template",
+  "name": "@aux4/oauth",
   "version": "0.0.1",
-  "description": "",
+  "description": "OAuth Server CLI",
   "main": "index.js",
   "preferGlobal": true,
   "bin": {
-    "aux4-": "bin/executable.js"
+    "aux4-oauth": "bin/executable.js"
   },
   "scripts": {
     "test": "aux4-test run",
@@ -13,23 +13,26 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/aux4/template.git"
+    "url": "git+ssh://git@github.com/aux4/oauth.git"
   },
   "keywords": [
     "aux4",
-    "cli"
+    "cli",
+    "oauth",
+    "security"
   ],
   "author": "Aux4 Team",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/aux4/template/issues"
+    "url": "https://github.com/aux4/oauth/issues"
   },
   "homepage": "https://aux4.io",
   "funding": "https://aux4.io/donate",
   "dependencies": {
     "@aux4/config": "^1.0.3",
-    "@aux4/engine": "^1.0.53",
-    "@aux4/input": "^0.0.3"
+    "@aux4/engine": "^1.0.56",
+    "@aux4/input": "^0.0.3",
+    "@node-oauth/oauth2-server": "^5.0.0"
   },
   "devDependencies": {
     "@aux4/test": "^0.0.19"

@@ -1,8 +1,15 @@
-# template
-Aux4 CLI Template
+# @aux4/oauth
+OAuth Server CLI
+
+![npm](https://img.shields.io/npm/v/@aux4/oauth)
 
 ## Install
 
 ```bash
-aux4 init
+npm install -g @aux4/oauth
+```
+
+## Usage
+```bash
+$ aux4-oauth
 ```
