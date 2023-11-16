@@ -12,6 +12,7 @@ async function tokenCommand(params) {
   const password = await params.password;
   const authorizationCode = await params.authorization_code;
   const refreshToken = await params.refresh_token;
+  const redirectUri = await params.redirect_uri;
   const scope = (await params.scope) || undefined;
 
   const authorization = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
@@ -23,6 +24,7 @@ async function tokenCommand(params) {
 
   const body = {
     grant_type: grantType,
+    redirect_uri: redirectUri,
     scope
   };
 
@@ -30,7 +32,7 @@ async function tokenCommand(params) {
     body.username = username;
     body.password = password;
   } else if (grantType === "authorization_code") {
-    body.authorization_code = authorizationCode;
+    body.code = authorizationCode;
   } else if (grantType === "client_credentials") {
     body.client_id = clientId;
     body.client_secret = clientSecret;
