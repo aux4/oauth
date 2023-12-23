@@ -130,7 +130,7 @@ const config = {
   try {
     await engine.run(args);
   } catch (e) {
-    console.error(e.message.red, e);
+    console.error(e.message.red);
     process.exit(1);
   }
 })();

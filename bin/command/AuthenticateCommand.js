@@ -1,17 +1,14 @@
 const { Printer } = require("@aux4/engine");
 const OAuthServer = require("../../lib/OAuthServer");
-const OAuthConfigModel = require("../../lib/OAuthConfigModel");
 
 async function authenticateCommand(params) {
   const out = Printer.on(process.stdout);
 
   const accessToken = await params.accessToken;
 
-  const options = await params.options;
-  const model = await params.model;
   const scope = (await params.scope) || undefined;
 
-  const server = new OAuthServer(options, new OAuthConfigModel(model));
+  const server = await OAuthServer.from(params);
 
   const response = await server.authenticate(
     {

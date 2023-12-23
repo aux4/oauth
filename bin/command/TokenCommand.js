@@ -1,6 +1,5 @@
 const { Printer } = require("@aux4/engine");
 const OAuthServer = require("../../lib/OAuthServer");
-const OAuthConfigModel = require("../../lib/OAuthConfigModel");
 
 async function tokenCommand(params) {
   const out = Printer.on(process.stdout);
@@ -17,10 +16,7 @@ async function tokenCommand(params) {
 
   const authorization = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
 
-  const options = await params.options;
-  const model = await params.model;
-
-  const server = new OAuthServer(options, new OAuthConfigModel(model));
+  const server = await OAuthServer.from(params);
 
   const body = {
     grant_type: grantType,
