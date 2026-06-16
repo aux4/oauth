@@ -1,0 +1,14 @@
+config:
+  # Bundled first-party provider URLs. aux4/oauth is itself an aux4-ecosystem
+  # package, so it ships the endpoints of its own home identity provider
+  # (sso.aux4.io). These are URLs ONLY — a clientId/clientSecret is per-app and
+  # always supplied by the user, never bundled here.
+  #
+  # No third-party providers (Google, GitHub, etc.) live here: the engine is
+  # provider-agnostic. Other providers either pass URL flags directly or are
+  # installed as separate community/oauth-<name> packages that contribute URLs.
+  aux4:
+    authUrl: https://sso.aux4.io/authorize
+    tokenUrl: https://sso.aux4.io/token
+    userinfoUrl: https://sso.aux4.io/userinfo
+    scopes: openid,email,profile
