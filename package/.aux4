@@ -1,0 +1,174 @@
+{
+  "scope": "aux4",
+  "name": "oauth",
+  "version": "0.1.0",
+  "description": "Provider-agnostic OAuth2 client engine, delegating the authorization-code-with-PKCE flow to aux4/curl",
+  "license": "Apache-2.0",
+  "tags": [
+    "aux4",
+    "oauth",
+    "oauth2",
+    "auth",
+    "login",
+    "oidc"
+  ],
+  "dependencies": [
+    "aux4/curl",
+    "aux4/config"
+  ],
+  "profiles": [
+    {
+      "name": "main",
+      "commands": [
+        {
+          "name": "oauth",
+          "execute": [
+            "profile:oauth"
+          ],
+          "help": {
+            "text": "Provider-agnostic OAuth2 client engine"
+          }
+        }
+      ]
+    },
+    {
+      "name": "oauth",
+      "commands": [
+        {
+          "name": "login",
+          "execute": [
+            "set:bundledRaw=!aux4 config get --file ${packageDir}/providers.yaml ${provider}",
+            "set:bundled=json:nvl(bundledRaw, '{}')",
+            "set:userRaw=!if(configFile==) && echo '{}' || aux4 config get --file ${configFile} ${provider}",
+            "set:user=json:nvl(userRaw, '{}')",
+            "set:resolvedAuthUrl=nvl(authUrl, user.authUrl, bundled.authUrl)",
+            "set:resolvedTokenUrl=nvl(tokenUrl, user.tokenUrl, bundled.tokenUrl)",
+            "set:resolvedUserinfoUrl=nvl(userinfoUrl, user.userinfoUrl, bundled.userinfoUrl)",
+            "set:resolvedScopes=nvl(scopes, user.scopes, bundled.scopes)",
+            "set:resolvedClientId=nvl(clientId, user.clientId)",
+            "set:resolvedClientSecret=nvl(clientSecret, user.clientSecret)",
+            "if(resolvedAuthUrl==) && echo \"Error: no authUrl for provider '${provider}'; pass --authUrl/--tokenUrl or install a provider package\" 1>&2 && exit 1 || true",
+            "if(resolvedTokenUrl==) && echo \"Error: no tokenUrl for provider '${provider}'; pass --authUrl/--tokenUrl or install a provider package\" 1>&2 && exit 1 || true",
+            "aux4 curl oauth login ${provider} --clientId value(resolvedClientId) --clientSecret value(resolvedClientSecret) --authUrl value(resolvedAuthUrl) --tokenUrl value(resolvedTokenUrl) --scopes value(resolvedScopes) --callbackPort value(callbackPort) --tokenFile value(tokenFile)"
+          ],
+          "help": {
+            "text": "Authenticate with a provider via the authorization-code flow (delegates to aux4 curl oauth login)",
+            "variables": [
+              {
+                "name": "provider",
+                "text": "Provider name (free label; also the token-file key). Use 'aux4' for the bundled aux4 SSO URLs"
+              },
+              {
+                "name": "clientId",
+                "text": "OAuth client ID (flag, env OAUTH_CLIENT_ID, or user config via secret://)",
+                "env": "OAUTH_CLIENT_ID",
+                "default": ""
+              },
+              {
+                "name": "clientSecret",
+                "text": "OAuth client secret (flag, env OAUTH_CLIENT_SECRET, or user config via secret://)",
+                "env": "OAUTH_CLIENT_SECRET",
+                "default": ""
+              },
+              {
+                "name": "authUrl",
+                "text": "Authorization endpoint URL (resolved from flag, then user config, then bundled config)",
+                "default": ""
+              },
+              {
+                "name": "tokenUrl",
+                "text": "Token exchange endpoint URL (resolved from flag, then user config, then bundled config)",
+                "default": ""
+              },
+              {
+                "name": "userinfoUrl",
+                "text": "Userinfo endpoint URL (resolved from flag, then user config, then bundled config; reserved for the web-login flow)",
+                "default": ""
+              },
+              {
+                "name": "scopes",
+                "text": "Comma-separated scopes (resolved from flag, then user config, then bundled config)",
+                "default": ""
+              },
+              {
+                "name": "callbackPort",
+                "text": "Local callback server port",
+                "default": "9876"
+              },
+              {
+                "name": "tokenFile",
+                "text": "Custom token file path (default: .oauth/<provider>.json)",
+                "default": ""
+              },
+              {
+                "name": "configFile",
+                "text": "Path to a user config file (config.yaml) providing per-provider URLs/scopes/credentials",
+                "default": ""
+              }
+            ]
+          }
+        },
+        {
+          "name": "token",
+          "execute": [
+            "aux4 curl oauth token ${provider} --tokenFile value(tokenFile)"
+          ],
+          "help": {
+            "text": "Get a valid access token, auto-refreshing if expired (delegates to aux4 curl oauth token)",
+            "variables": [
+              {
+                "name": "provider",
+                "text": "Provider name (the token-file key)"
+              },
+              {
+                "name": "tokenFile",
+                "text": "Custom token file path (default: .oauth/<provider>.json)",
+                "default": ""
+              }
+            ]
+          }
+        },
+        {
+          "name": "status",
+          "execute": [
+            "aux4 curl oauth status ${provider} --tokenFile value(tokenFile)"
+          ],
+          "help": {
+            "text": "Show OAuth token status for a provider (delegates to aux4 curl oauth status)",
+            "variables": [
+              {
+                "name": "provider",
+                "text": "Provider name (the token-file key)"
+              },
+              {
+                "name": "tokenFile",
+                "text": "Custom token file path (default: .oauth/<provider>.json)",
+                "default": ""
+              }
+            ]
+          }
+        },
+        {
+          "name": "logout",
+          "execute": [
+            "aux4 curl oauth logout ${provider} --tokenFile value(tokenFile)"
+          ],
+          "help": {
+            "text": "Remove the stored OAuth token for a provider (delegates to aux4 curl oauth logout)",
+            "variables": [
+              {
+                "name": "provider",
+                "text": "Provider name (the token-file key)"
+              },
+              {
+                "name": "tokenFile",
+                "text": "Custom token file path (default: .oauth/<provider>.json)",
+                "default": ""
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
