@@ -16,6 +16,13 @@
     "aux4/curl",
     "aux4/config"
   ],
+  "system": [
+    [
+      "test:node --version",
+      "brew:node",
+      "linux:nodejs"
+    ]
+  ],
   "profiles": [
     {
       "name": "main",
@@ -163,6 +170,125 @@
               {
                 "name": "tokenFile",
                 "text": "Custom token file path (default: .oauth/<provider>.json)",
+                "default": ""
+              }
+            ]
+          }
+        },
+        {
+          "name": "authorize-url",
+          "execute": [
+            "set:bundledRaw=!aux4 config get --file ${packageDir}/providers.yaml ${provider}",
+            "set:bundled=json:nvl(bundledRaw, '{}')",
+            "set:userRaw=!if(configFile==) && echo '{}' || aux4 config get --file ${configFile} ${provider}",
+            "set:user=json:nvl(userRaw, '{}')",
+            "set:resolvedAuthUrl=nvl(authUrl, user.authUrl, bundled.authUrl)",
+            "set:resolvedScopes=nvl(scopes, user.scopes, bundled.scopes)",
+            "if(resolvedAuthUrl==) && echo \"Error: no authUrl for provider '${provider}'; pass --authUrl or install a provider package\" 1>&2 && exit 1 || true",
+            "node ${packageDir}/lib/oauth-web.js authorize-url --authUrl value(resolvedAuthUrl) --clientId value(clientId) --redirectUri value(redirectUri) --scopes value(resolvedScopes) --state value(state)"
+          ],
+          "help": {
+            "text": "Build a PKCE authorization URL for the web login flow (prints url, codeVerifier, state as JSON)",
+            "variables": [
+              {
+                "name": "provider",
+                "text": "Provider name (free label). Use 'aux4' for the bundled aux4 SSO URLs"
+              },
+              {
+                "name": "clientId",
+                "text": "OAuth client ID",
+                "env": "OAUTH_CLIENT_ID"
+              },
+              {
+                "name": "redirectUri",
+                "text": "Redirect URI registered with the provider (the callback endpoint)"
+              },
+              {
+                "name": "authUrl",
+                "text": "Authorization endpoint URL (resolved from flag, then user config, then bundled config)",
+                "default": ""
+              },
+              {
+                "name": "scopes",
+                "text": "Comma-separated scopes (resolved from flag, then user config, then bundled config)",
+                "default": ""
+              },
+              {
+                "name": "state",
+                "text": "Opaque state value (generated as base64url random if not supplied)",
+                "default": ""
+              },
+              {
+                "name": "configFile",
+                "text": "Path to a user config file (config.yaml) providing per-provider URLs/scopes",
+                "default": ""
+              }
+            ]
+          }
+        },
+        {
+          "name": "exchange",
+          "execute": [
+            "set:bundledRaw=!aux4 config get --file ${packageDir}/providers.yaml ${provider}",
+            "set:bundled=json:nvl(bundledRaw, '{}')",
+            "set:userRaw=!if(configFile==) && echo '{}' || aux4 config get --file ${configFile} ${provider}",
+            "set:user=json:nvl(userRaw, '{}')",
+            "set:resolvedTokenUrl=nvl(tokenUrl, user.tokenUrl, bundled.tokenUrl)",
+            "set:resolvedUserinfoUrl=nvl(userinfoUrl, user.userinfoUrl, bundled.userinfoUrl)",
+            "set:resolvedMapRaw=!if(configFile==) && echo '' || aux4 config get --file ${configFile} ${provider}/map",
+            "set:resolvedMap=nvl(map, resolvedMapRaw, '{}')",
+            "if(resolvedTokenUrl==) && echo \"Error: no tokenUrl for provider '${provider}'; pass --tokenUrl or install a provider package\" 1>&2 && exit 1 || true",
+            "if(resolvedUserinfoUrl==) && echo \"Error: no userinfoUrl for provider '${provider}'; pass --userinfoUrl or install a provider package\" 1>&2 && exit 1 || true",
+            "node ${packageDir}/lib/oauth-web.js exchange --tokenUrl value(resolvedTokenUrl) --userinfoUrl value(resolvedUserinfoUrl) --clientId value(clientId) --clientSecret value(clientSecret) --code value(code) --codeVerifier value(codeVerifier) --redirectUri value(redirectUri) --provider value(provider) --map value(resolvedMap)"
+          ],
+          "help": {
+            "text": "Exchange an authorization code for tokens and build a principal from userinfo (prints principal JSON)",
+            "variables": [
+              {
+                "name": "provider",
+                "text": "Provider name (free label, included in the principal). Use 'aux4' for the bundled aux4 SSO URLs"
+              },
+              {
+                "name": "clientId",
+                "text": "OAuth client ID",
+                "env": "OAUTH_CLIENT_ID"
+              },
+              {
+                "name": "clientSecret",
+                "text": "OAuth client secret",
+                "env": "OAUTH_CLIENT_SECRET",
+                "default": ""
+              },
+              {
+                "name": "code",
+                "text": "Authorization code returned to the redirect URI"
+              },
+              {
+                "name": "codeVerifier",
+                "text": "PKCE code verifier produced by authorize-url"
+              },
+              {
+                "name": "redirectUri",
+                "text": "Redirect URI used in the authorize-url step (must match)"
+              },
+              {
+                "name": "tokenUrl",
+                "text": "Token endpoint URL (resolved from flag, then user config, then bundled config)",
+                "default": ""
+              },
+              {
+                "name": "userinfoUrl",
+                "text": "Userinfo endpoint URL (resolved from flag, then user config, then bundled config)",
+                "default": ""
+              },
+              {
+                "name": "map",
+                "text": "JSON object mapping userinfo fields to principal claims (e.g. {\"id\":\"sub\"}); resolved from flag, then user config",
+                "default": ""
+              },
+              {
+                "name": "configFile",
+                "text": "Path to a user config file (config.yaml) providing per-provider URLs and field map",
                 "default": ""
               }
             ]
