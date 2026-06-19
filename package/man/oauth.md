@@ -14,10 +14,18 @@ The package bundles exactly one first-party provider, `aux4`, with the URLs of i
 
 Available subcommands:
 
-- `login` — Authenticate with a provider and store the token
+- `login` — Authenticate with a provider and store the token (interactive CLI flow)
 - `token` — Print a valid access token, refreshing if expired
 - `status` — Show the stored token status
 - `logout` — Remove the stored token
+- `authorize-url` — Build a PKCE authorization URL for the server-side web login flow
+- `exchange` — Exchange an authorization code for tokens and build a principal from userinfo
+
+The `authorize-url` and `exchange` commands are headless server-side primitives
+for the web login flow (no browser interaction, no local callback server). They
+output JSON and are intended to be shelled out to by a web application — for
+example, aux4/api wires them into its `/auth/signin` and `/auth/callback`
+endpoints.
 
 #### Usage
 
