@@ -54,6 +54,29 @@ aux4 oauth exchange --provider plain --tokenUrl http://localhost:8731/token --us
 }
 ```
 
+### should also return the tokens when includeTokens is true
+
+```execute
+aux4 oauth exchange --provider github --tokenUrl http://localhost:8731/token --userinfoUrl http://localhost:8731/userinfo --clientId CID --clientSecret CSECRET --code authcode123 --codeVerifier verifier456 --redirectUri https://app.example/callback --map '{"id":"sub"}' --includeTokens true
+```
+
+```expect:json
+{
+  "accessToken": "mockaccess",
+  "refreshToken": "mockrefresh",
+  "idToken": "mockid",
+  "expiresIn": 3600,
+  "tokenType": "bearer",
+  "principal": {
+    "sub": 4242,
+    "login": "octocat",
+    "name": "The Octocat",
+    "email": "octo@example.com",
+    "provider": "github"
+  }
+}
+```
+
 ### should resolve the tokenUrl, userinfoUrl, and field map from the user config
 
 ```file:config.yaml

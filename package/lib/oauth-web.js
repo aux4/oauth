@@ -191,7 +191,88 @@ async function exchange(args) {
     principal.provider = provider;
   }
 
+  if (args.includeTokens === "true") {
+    // Token-broker mode: return the tokens themselves alongside the identity, so
+    // a caller that holds no client secret (the OAuth broker's HTTP client) can
+    // persist and later use/refresh them. Without this flag the command stays an
+    // identity-only exchange (the web-login shape).
+    const output = {
+      accessToken,
+      refreshToken: tokenData.refresh_token || "",
+      idToken: tokenData.id_token || "",
+      expiresIn: typeof tokenData.expires_in === "number" ? tokenData.expires_in : undefined,
+      tokenType: tokenData.token_type || "Bearer",
+      principal
+    };
+    process.stdout.write(JSON.stringify(output) + "\n");
+    return;
+  }
+
   process.stdout.write(JSON.stringify(principal) + "\n");
+}
+
+/*
+ * Renew an access token from a refresh token. Used by the broker's refresh
+ * route: the broker holds the client secret and calls this so a thin client
+ * that never sees the secret can keep a long-lived session alive.
+ */
+async function refresh(args) {
+  const tokenUrl = requireArg(args, "tokenUrl", "refresh");
+  const clientId = requireArg(args, "clientId", "refresh");
+  const clientSecret = args.clientSecret || "";
+  const refreshToken = requireArg(args, "refreshToken", "refresh");
+
+  const body = new URLSearchParams();
+  body.set("grant_type", "refresh_token");
+  body.set("refresh_token", refreshToken);
+  body.set("client_id", clientId);
+  if (clientSecret !== "") {
+    body.set("client_secret", clientSecret);
+  }
+
+  let response;
+  try {
+    response = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json"
+      },
+      body: body.toString()
+    });
+  } catch (error) {
+    fail(`Error: refresh request failed: ${error.message}`);
+  }
+
+  const text = await response.text();
+  if (!response.ok) {
+    fail(`Error: token endpoint returned ${response.status}: ${text}`);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    fail(`Error: token endpoint returned non-JSON response: ${text}`);
+  }
+
+  if (data.error) {
+    fail(`Error: refresh failed: ${data.error}${data.error_description ? ` (${data.error_description})` : ""}`);
+  }
+  if (!data.access_token) {
+    fail(`Error: token endpoint did not return an access_token: ${text}`);
+  }
+
+  // A provider may or may not rotate the refresh token; when it does not, the
+  // response's refreshToken is empty and the caller keeps the one it has.
+  const output = {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || "",
+    idToken: data.id_token || "",
+    expiresIn: typeof data.expires_in === "number" ? data.expires_in : undefined,
+    tokenType: data.token_type || "Bearer"
+  };
+  process.stdout.write(JSON.stringify(output) + "\n");
 }
 
 /*
@@ -234,6 +315,8 @@ async function main() {
     authorizeUrl(args);
   } else if (command === "exchange") {
     await exchange(args);
+  } else if (command === "refresh") {
+    await refresh(args);
   } else {
     fail(`Error: unknown subcommand '${command || ""}'`);
   }

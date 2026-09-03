@@ -22,6 +22,23 @@ const server = http.createServer((req, res) => {
   req.on("end", () => {
     if (req.method === "POST" && req.url === "/token") {
       const params = new URLSearchParams(body);
+      if (params.get("grant_type") === "refresh_token") {
+        if (params.get("refresh_token") !== "mockrefresh") {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "invalid_grant" }));
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            access_token: "mockaccess2",
+            token_type: "bearer",
+            refresh_token: "mockrefresh2",
+            expires_in: 3600
+          })
+        );
+        return;
+      }
       if (
         params.get("grant_type") !== "authorization_code" ||
         params.get("code") !== "authcode123" ||
@@ -32,7 +49,15 @@ const server = http.createServer((req, res) => {
         return;
       }
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ access_token: "mockaccess", token_type: "bearer" }));
+      res.end(
+        JSON.stringify({
+          access_token: "mockaccess",
+          token_type: "bearer",
+          refresh_token: "mockrefresh",
+          expires_in: 3600,
+          id_token: "mockid"
+        })
+      );
     } else if (req.method === "GET" && req.url === "/userinfo") {
       if ((req.headers["authorization"] || "") !== "Bearer mockaccess") {
         res.writeHead(401);

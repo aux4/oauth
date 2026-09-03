@@ -48,24 +48,41 @@ The output is the principal as a single JSON object on stdout:
 }
 ```
 
+**Token broker mode.** By default only the identity principal is returned. Pass
+`--includeTokens true` to also return the tokens, so a caller that holds no
+client secret — such as an OAuth broker exchanging on behalf of a thin CLI — can
+persist and later use or refresh them. The output then nests the principal:
+
+```json
+{
+  "accessToken": "ya29...",
+  "refreshToken": "1//0g...",
+  "idToken": "eyJ...",
+  "expiresIn": 3599,
+  "tokenType": "Bearer",
+  "principal": { "sub": "123", "email": "user@example.com", "provider": "acme" }
+}
+```
+
 #### Usage
 
 ```bash
 aux4 oauth exchange --provider <name> --clientId <id> --clientSecret <secret> \
   --code <code> --codeVerifier <verifier> --redirectUri <url> \
-  [--tokenUrl <url>] [--userinfoUrl <url>] [--map <json>] [--configFile <path>]
+  [--tokenUrl <url>] [--userinfoUrl <url>] [--map <json>] [--configFile <path>] [--includeTokens <bool>]
 ```
 
---provider     Provider name (also added to the principal) (required)
---clientId     OAuth client ID (flag or env `OAUTH_CLIENT_ID`) (required)
---clientSecret OAuth client secret (flag or env `OAUTH_CLIENT_SECRET`)
---code         Authorization code returned to the redirect URI (required)
---codeVerifier PKCE code verifier produced by `authorize-url` (required)
---redirectUri  Redirect URI used in the `authorize-url` step; must match (required)
---tokenUrl     Token endpoint URL (flag > user config > bundled config)
---userinfoUrl  Userinfo endpoint URL (flag > user config > bundled config)
---map          JSON object mapping userinfo fields to principal claims, e.g. `{"id":"sub"}`
---configFile   Path to a user `config.yaml` with per-provider URLs and field map
+--provider      Provider name (also added to the principal) (required)
+--clientId      OAuth client ID (flag or env `OAUTH_CLIENT_ID`) (required)
+--clientSecret  OAuth client secret (flag or env `OAUTH_CLIENT_SECRET`)
+--code          Authorization code returned to the redirect URI (required)
+--codeVerifier  PKCE code verifier produced by `authorize-url` (required)
+--redirectUri   Redirect URI used in the `authorize-url` step; must match (required)
+--tokenUrl      Token endpoint URL (flag > user config > bundled config)
+--userinfoUrl   Userinfo endpoint URL (flag > user config > bundled config)
+--map           JSON object mapping userinfo fields to principal claims, e.g. `{"id":"sub"}`
+--configFile    Path to a user `config.yaml` with per-provider URLs and field map
+--includeTokens When `true`, also return the access/refresh/id tokens alongside the principal (default `false`)
 
 #### Example
 

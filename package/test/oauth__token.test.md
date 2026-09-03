@@ -9,7 +9,7 @@ aux4 oauth token --provider aux4
 ```
 
 ```error:partial
-Error: no token found for provider "aux4". Run oauth login first
+Error: no token found for provider "aux4". Run oauth login or auth add first
 ```
 
 ### should delegate to the named provider's token file
@@ -19,5 +19,5 @@ aux4 oauth token --provider acme
 ```
 
 ```error:partial
-Error: no token found for provider "acme". Run oauth login first
+Error: no token found for provider "acme". Run oauth login or auth add first
 ```

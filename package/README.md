@@ -217,6 +217,60 @@ Options:
 - `--userinfoUrl` — Userinfo endpoint URL (flag > user config > bundled).
 - `--map` — JSON object mapping userinfo fields to principal claims.
 - `--configFile` — Path to a user `config.yaml` with per-provider settings.
+- `--includeTokens` — When `true`, also return the access/refresh/id tokens alongside the principal (see Token broker mode).
+
+#### Token broker mode
+
+By default `exchange` returns only the identity principal (the web-login shape). Pass `--includeTokens true` to also return the tokens, so a caller that holds no client secret — such as an OAuth broker exchanging on behalf of a thin CLI — can persist and later use or refresh them:
+
+```json
+{
+  "accessToken": "ya29...",
+  "refreshToken": "1//0g...",
+  "idToken": "eyJ...",
+  "expiresIn": 3599,
+  "tokenType": "Bearer",
+  "principal": {
+    "sub": 4242,
+    "email": "octo@example.com",
+    "provider": "github"
+  }
+}
+```
+
+### oauth refresh
+
+Renew an access token from a refresh token, printing the new tokens as JSON. This is the primitive a token broker wraps: the broker holds the client secret and calls `refresh` so a thin client that never sees the secret can keep a long-lived session alive.
+
+```bash
+aux4 oauth refresh --provider github \
+  --tokenUrl https://github.com/login/oauth/access_token \
+  --clientId YOUR_CLIENT_ID --clientSecret YOUR_CLIENT_SECRET \
+  --refreshToken 1//0g...
+```
+
+Output:
+
+```json
+{
+  "accessToken": "ya29...",
+  "refreshToken": "1//0g...",
+  "idToken": "",
+  "expiresIn": 3599,
+  "tokenType": "Bearer"
+}
+```
+
+When the provider does not rotate the refresh token, `refreshToken` comes back empty and the caller keeps the one it already has.
+
+Options:
+
+- `--provider` — Provider name (required).
+- `--clientId` — OAuth client ID (also `OAUTH_CLIENT_ID`) (required).
+- `--clientSecret` — OAuth client secret (also `OAUTH_CLIENT_SECRET`).
+- `--refreshToken` — The refresh token to exchange for a new access token (required).
+- `--tokenUrl` — Token endpoint URL (flag > user config > bundled).
+- `--configFile` — Path to a user `config.yaml` with per-provider settings.
 
 ### Web login flow
 

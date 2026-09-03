@@ -239,10 +239,10 @@
             "set:resolvedMap=nvl(map, resolvedMapRaw, '{}')",
             "if(resolvedTokenUrl==) && echo \"Error: no tokenUrl for provider '${provider}'; pass --tokenUrl or install a provider package\" 1>&2 && exit 1 || true",
             "if(resolvedUserinfoUrl==) && echo \"Error: no userinfoUrl for provider '${provider}'; pass --userinfoUrl or install a provider package\" 1>&2 && exit 1 || true",
-            "node ${packageDir}/lib/oauth-web.js exchange --tokenUrl value(resolvedTokenUrl) --userinfoUrl value(resolvedUserinfoUrl) --clientId value(clientId) --clientSecret value(clientSecret) --code value(code) --codeVerifier value(codeVerifier) --redirectUri value(redirectUri) --provider value(provider) --map value(resolvedMap)"
+            "node ${packageDir}/lib/oauth-web.js exchange --tokenUrl value(resolvedTokenUrl) --userinfoUrl value(resolvedUserinfoUrl) --clientId value(clientId) --clientSecret value(clientSecret) --code value(code) --codeVerifier value(codeVerifier) --redirectUri value(redirectUri) --provider value(provider) --map value(resolvedMap) --includeTokens value(includeTokens)"
           ],
           "help": {
-            "text": "Exchange an authorization code for tokens and build a principal from userinfo (prints principal JSON)",
+            "text": "Exchange an authorization code for tokens and build a principal from userinfo (prints principal JSON; --includeTokens true also returns the tokens)",
             "variables": [
               {
                 "name": "provider",
@@ -289,6 +289,57 @@
               {
                 "name": "configFile",
                 "text": "Path to a user config file (config.yaml) providing per-provider URLs and field map",
+                "default": ""
+              },
+              {
+                "name": "includeTokens",
+                "text": "When true, also return the access/refresh/id tokens alongside the principal (for a token broker)",
+                "default": "false"
+              }
+            ]
+          }
+        },
+        {
+          "name": "refresh",
+          "execute": [
+            "set:bundledRaw=!aux4 config get --file ${packageDir}/providers.yaml ${provider}",
+            "set:bundled=json:nvl(bundledRaw, '{}')",
+            "set:userRaw=!if(configFile==) && echo '{}' || aux4 config get --file ${configFile} ${provider}",
+            "set:user=json:nvl(userRaw, '{}')",
+            "set:resolvedTokenUrl=nvl(tokenUrl, user.tokenUrl, bundled.tokenUrl)",
+            "if(resolvedTokenUrl==) && echo \"Error: no tokenUrl for provider '${provider}'; pass --tokenUrl or install a provider package\" 1>&2 && exit 1 || true",
+            "node ${packageDir}/lib/oauth-web.js refresh --tokenUrl value(resolvedTokenUrl) --clientId value(clientId) --clientSecret value(clientSecret) --refreshToken value(refreshToken)"
+          ],
+          "help": {
+            "text": "Renew an access token from a refresh token (prints token JSON)",
+            "variables": [
+              {
+                "name": "provider",
+                "text": "Provider name. Use 'aux4' for the bundled aux4 SSO URLs"
+              },
+              {
+                "name": "clientId",
+                "text": "OAuth client ID",
+                "env": "OAUTH_CLIENT_ID"
+              },
+              {
+                "name": "clientSecret",
+                "text": "OAuth client secret",
+                "env": "OAUTH_CLIENT_SECRET",
+                "default": ""
+              },
+              {
+                "name": "refreshToken",
+                "text": "The refresh token to exchange for a new access token"
+              },
+              {
+                "name": "tokenUrl",
+                "text": "Token endpoint URL (resolved from flag, then user config, then bundled config)",
+                "default": ""
+              },
+              {
+                "name": "configFile",
+                "text": "Path to a user config file (config.yaml) providing per-provider URLs",
                 "default": ""
               }
             ]
