@@ -20,6 +20,36 @@ const server = http.createServer((req, res) => {
   let body = "";
   req.on("data", (chunk) => (body += chunk));
   req.on("end", () => {
+    // Basic-auth token endpoint (client_secret_basic, as X requires). It ONLY
+    // accepts credentials in the Authorization header and REJECTS a client_secret
+    // in the body, so a test proves --clientSecretIn basic took effect.
+    if (req.method === "POST" && req.url === "/token-basic") {
+      const params = new URLSearchParams(body);
+      const authz = req.headers["authorization"] || "";
+      const decoded = authz.startsWith("Basic ")
+        ? Buffer.from(authz.slice(6), "base64").toString()
+        : "";
+      if (decoded !== "CID:CSECRET") {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid_client", error_description: "expected Basic auth" }));
+        return;
+      }
+      if (params.get("client_secret")) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid_request", error_description: "client_secret must not be in the body" }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          access_token: "mockaccess-basic",
+          token_type: "bearer",
+          refresh_token: "mockrefresh-basic",
+          expires_in: 3600
+        })
+      );
+      return;
+    }
     if (req.method === "POST" && req.url === "/token") {
       const params = new URLSearchParams(body);
       if (params.get("grant_type") === "refresh_token") {
@@ -59,7 +89,7 @@ const server = http.createServer((req, res) => {
         })
       );
     } else if (req.method === "GET" && req.url === "/userinfo") {
-      if ((req.headers["authorization"] || "") !== "Bearer mockaccess") {
+      if (!(req.headers["authorization"] || "").startsWith("Bearer mockaccess")) {
         res.writeHead(401);
         res.end("unauthorized");
         return;

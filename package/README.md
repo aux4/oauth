@@ -216,6 +216,7 @@ Options:
 - `--tokenUrl` — Token endpoint URL (flag > user config > bundled).
 - `--userinfoUrl` — Userinfo endpoint URL (flag > user config > bundled).
 - `--map` — JSON object mapping userinfo fields to principal claims.
+- `--clientSecretIn` — Where the client secret is sent at the token endpoint: `basic` (HTTP Basic auth, required by e.g. X/Twitter confidential clients) or `body` (default). Resolved from flag, then user/bundled config.
 - `--configFile` — Path to a user `config.yaml` with per-provider settings.
 - `--includeTokens` — When `true`, also return the access/refresh/id tokens alongside the principal (see Token broker mode).
 
@@ -270,7 +271,18 @@ Options:
 - `--clientSecret` — OAuth client secret (also `OAUTH_CLIENT_SECRET`).
 - `--refreshToken` — The refresh token to exchange for a new access token (required).
 - `--tokenUrl` — Token endpoint URL (flag > user config > bundled).
+- `--clientSecretIn` — Where the client secret is sent: `basic` (HTTP Basic auth, e.g. X) or `body` (default). Resolved from flag, then user/bundled config.
 - `--configFile` — Path to a user `config.yaml` with per-provider settings.
+
+**Per-provider config.** A `config.yaml` can carry `clientSecretIn` per provider so callers don't repeat it:
+
+```yaml
+config:
+  x:
+    tokenUrl: https://api.x.com/2/oauth2/token
+    userinfoUrl: https://api.x.com/2/users/me
+    clientSecretIn: basic
+```
 
 ### Web login flow
 

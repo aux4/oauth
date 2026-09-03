@@ -237,9 +237,10 @@
             "set:resolvedUserinfoUrl=nvl(userinfoUrl, user.userinfoUrl, bundled.userinfoUrl)",
             "set:resolvedMapRaw=!if(configFile==) && echo '' || aux4 config get --file ${configFile} ${provider}/map",
             "set:resolvedMap=nvl(map, resolvedMapRaw, '{}')",
+            "set:resolvedClientSecretIn=nvl(clientSecretIn, user.clientSecretIn, bundled.clientSecretIn, 'body')",
             "if(resolvedTokenUrl==) && echo \"Error: no tokenUrl for provider '${provider}'; pass --tokenUrl or install a provider package\" 1>&2 && exit 1 || true",
             "if(resolvedUserinfoUrl==) && echo \"Error: no userinfoUrl for provider '${provider}'; pass --userinfoUrl or install a provider package\" 1>&2 && exit 1 || true",
-            "node ${packageDir}/lib/oauth-web.js exchange --tokenUrl value(resolvedTokenUrl) --userinfoUrl value(resolvedUserinfoUrl) --clientId value(clientId) --clientSecret value(clientSecret) --code value(code) --codeVerifier value(codeVerifier) --redirectUri value(redirectUri) --provider value(provider) --map value(resolvedMap) --includeTokens value(includeTokens)"
+            "node ${packageDir}/lib/oauth-web.js exchange --tokenUrl value(resolvedTokenUrl) --userinfoUrl value(resolvedUserinfoUrl) --clientId value(clientId) --clientSecret value(clientSecret) --code value(code) --codeVerifier value(codeVerifier) --redirectUri value(redirectUri) --provider value(provider) --map value(resolvedMap) --clientSecretIn value(resolvedClientSecretIn) --includeTokens value(includeTokens)"
           ],
           "help": {
             "text": "Exchange an authorization code for tokens and build a principal from userinfo (prints principal JSON; --includeTokens true also returns the tokens)",
@@ -287,6 +288,11 @@
                 "default": ""
               },
               {
+                "name": "clientSecretIn",
+                "text": "Where the client secret goes at the token endpoint: 'basic' (HTTP Basic auth, e.g. X) or 'body' (default). Resolved from flag, then user/bundled config",
+                "default": ""
+              },
+              {
                 "name": "configFile",
                 "text": "Path to a user config file (config.yaml) providing per-provider URLs and field map",
                 "default": ""
@@ -307,8 +313,9 @@
             "set:userRaw=!if(configFile==) && echo '{}' || aux4 config get --file ${configFile} ${provider}",
             "set:user=json:nvl(userRaw, '{}')",
             "set:resolvedTokenUrl=nvl(tokenUrl, user.tokenUrl, bundled.tokenUrl)",
+            "set:resolvedClientSecretIn=nvl(clientSecretIn, user.clientSecretIn, bundled.clientSecretIn, 'body')",
             "if(resolvedTokenUrl==) && echo \"Error: no tokenUrl for provider '${provider}'; pass --tokenUrl or install a provider package\" 1>&2 && exit 1 || true",
-            "node ${packageDir}/lib/oauth-web.js refresh --tokenUrl value(resolvedTokenUrl) --clientId value(clientId) --clientSecret value(clientSecret) --refreshToken value(refreshToken)"
+            "node ${packageDir}/lib/oauth-web.js refresh --tokenUrl value(resolvedTokenUrl) --clientId value(clientId) --clientSecret value(clientSecret) --refreshToken value(refreshToken) --clientSecretIn value(resolvedClientSecretIn)"
           ],
           "help": {
             "text": "Renew an access token from a refresh token (prints token JSON)",
@@ -335,6 +342,11 @@
               {
                 "name": "tokenUrl",
                 "text": "Token endpoint URL (resolved from flag, then user config, then bundled config)",
+                "default": ""
+              },
+              {
+                "name": "clientSecretIn",
+                "text": "Where the client secret goes at the token endpoint: 'basic' (HTTP Basic auth, e.g. X) or 'body' (default). Resolved from flag, then user/bundled config",
                 "default": ""
               },
               {

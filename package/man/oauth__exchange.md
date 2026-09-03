@@ -81,6 +81,7 @@ aux4 oauth exchange --provider <name> --clientId <id> --clientSecret <secret> \
 --tokenUrl      Token endpoint URL (flag > user config > bundled config)
 --userinfoUrl   Userinfo endpoint URL (flag > user config > bundled config)
 --map           JSON object mapping userinfo fields to principal claims, e.g. `{"id":"sub"}`
+--clientSecretIn Where the client secret is sent at the token endpoint: `basic` (HTTP Basic auth, e.g. X) or `body` (default); flag > user config > bundled
 --configFile    Path to a user `config.yaml` with per-provider URLs and field map
 --includeTokens When `true`, also return the access/refresh/id tokens alongside the principal (default `false`)
 

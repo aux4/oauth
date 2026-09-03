@@ -49,6 +49,7 @@ aux4 oauth refresh --provider <name> --clientId <id> [--clientSecret <secret>] \
 --clientSecret  OAuth client secret (flag or env `OAUTH_CLIENT_SECRET`)
 --refreshToken  The refresh token to exchange for a new access token (required)
 --tokenUrl      Token endpoint URL (flag > user config > bundled config)
+--clientSecretIn Where the client secret is sent: `basic` (HTTP Basic auth, e.g. X) or `body` (default); flag > user config > bundled
 --configFile    Path to a user `config.yaml` with per-provider URLs
 
 #### Example

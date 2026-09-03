@@ -34,6 +34,19 @@ aux4 oauth refresh --provider github --tokenUrl http://localhost:8731/token --cl
 }
 ```
 
+### should authenticate with HTTP Basic when clientSecretIn is basic
+
+The `/token-basic` endpoint accepts credentials only in the `Authorization: Basic`
+header and rejects a `client_secret` in the body (as X's confidential clients do).
+
+```execute
+aux4 oauth refresh --provider x --tokenUrl http://localhost:8731/token-basic --clientId CID --clientSecret CSECRET --refreshToken anytoken --clientSecretIn basic
+```
+
+```expect:partial
+"accessToken":"mockaccess-basic"
+```
+
 ### should fail when the refresh token is rejected
 
 ```execute

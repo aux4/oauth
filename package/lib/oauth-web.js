@@ -62,6 +62,20 @@ function fail(message) {
   process.exit(1);
 }
 
+// Decide how the confidential client authenticates at the token endpoint.
+// clientSecretIn "basic" → HTTP Basic auth (client_secret_basic), which some
+// providers require (e.g. X/Twitter confidential clients); anything else → the
+// secret goes in the form body (client_secret_post, the common default). A public
+// client (no secret) uses neither and relies on PKCE alone. Returns the header to
+// merge and whether the body should carry client_secret.
+function clientAuth(clientId, clientSecret, clientSecretIn) {
+  if (clientSecret !== "" && clientSecretIn === "basic") {
+    const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    return { header: { Authorization: `Basic ${basic}` }, bodySecret: false };
+  }
+  return { header: {}, bodySecret: clientSecret !== "" };
+}
+
 function pkce() {
   const codeVerifier = base64url(crypto.randomBytes(32));
   const codeChallenge = base64url(
@@ -118,12 +132,14 @@ async function exchange(args) {
     }
   }
 
+  const auth = clientAuth(clientId, clientSecret, args.clientSecretIn);
+
   const tokenBody = new URLSearchParams();
   tokenBody.set("grant_type", "authorization_code");
   tokenBody.set("code", code);
   tokenBody.set("redirect_uri", redirectUri);
   tokenBody.set("client_id", clientId);
-  if (clientSecret !== "") {
+  if (auth.bodySecret) {
     tokenBody.set("client_secret", clientSecret);
   }
   tokenBody.set("code_verifier", codeVerifier);
@@ -134,7 +150,8 @@ async function exchange(args) {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json"
+        Accept: "application/json",
+        ...auth.header
       },
       body: tokenBody.toString()
     });
@@ -222,11 +239,13 @@ async function refresh(args) {
   const clientSecret = args.clientSecret || "";
   const refreshToken = requireArg(args, "refreshToken", "refresh");
 
+  const auth = clientAuth(clientId, clientSecret, args.clientSecretIn);
+
   const body = new URLSearchParams();
   body.set("grant_type", "refresh_token");
   body.set("refresh_token", refreshToken);
   body.set("client_id", clientId);
-  if (clientSecret !== "") {
+  if (auth.bodySecret) {
     body.set("client_secret", clientSecret);
   }
 
@@ -236,7 +255,8 @@ async function refresh(args) {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json"
+        Accept: "application/json",
+        ...auth.header
       },
       body: body.toString()
     });

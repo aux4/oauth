@@ -77,6 +77,29 @@ aux4 oauth exchange --provider github --tokenUrl http://localhost:8731/token --u
 }
 ```
 
+### should authenticate with HTTP Basic when clientSecretIn is basic
+
+The `/token-basic` endpoint accepts credentials only in the `Authorization: Basic`
+header and rejects a `client_secret` in the body (as X's confidential clients do).
+
+```execute
+aux4 oauth exchange --provider x --tokenUrl http://localhost:8731/token-basic --userinfoUrl http://localhost:8731/userinfo --clientId CID --clientSecret CSECRET --code authcode123 --codeVerifier verifier456 --redirectUri https://app.example/callback --clientSecretIn basic --includeTokens true
+```
+
+```expect:partial
+"accessToken":"mockaccess-basic"
+```
+
+### should fail against a Basic-only endpoint when the secret is sent in the body
+
+```execute
+aux4 oauth exchange --provider x --tokenUrl http://localhost:8731/token-basic --userinfoUrl http://localhost:8731/userinfo --clientId CID --clientSecret CSECRET --code authcode123 --codeVerifier verifier456 --redirectUri https://app.example/callback
+```
+
+```error:partial
+Error: token endpoint returned 401
+```
+
 ### should resolve the tokenUrl, userinfoUrl, and field map from the user config
 
 ```file:config.yaml
