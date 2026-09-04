@@ -356,6 +356,70 @@
               }
             ]
           }
+        },
+        {
+          "name": "session",
+          "execute": [
+            "profile:oauth:session"
+          ],
+          "help": {
+            "text": "Broker session store for the hosted-callback + poll login flow (transient authorization codes, never tokens)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "oauth:session",
+      "commands": [
+        {
+          "name": "park",
+          "execute": [
+            "node ${packageDir}/lib/oauth-web.js session-park --id value(id) param(code) param(error) param(dir)"
+          ],
+          "help": {
+            "text": "Park an authorization code (or error) for a pending login session — server-side, transient, single-use",
+            "variables": [
+              {
+                "name": "id",
+                "text": "Session id chosen by the client (16-200 chars, [A-Za-z0-9_-]); used as a filename so it is strictly validated"
+              },
+              {
+                "name": "code",
+                "text": "Authorization code to park",
+                "default": ""
+              },
+              {
+                "name": "error",
+                "text": "Error to park instead of a code (e.g. access_denied)",
+                "default": ""
+              },
+              {
+                "name": "dir",
+                "text": "Session store directory (default: <tmpdir>/oauth-sessions)",
+                "default": ""
+              }
+            ]
+          }
+        },
+        {
+          "name": "poll",
+          "execute": [
+            "node ${packageDir}/lib/oauth-web.js session-poll --id value(id) param(dir)"
+          ],
+          "help": {
+            "text": "Poll a pending login session; returns {status: pending|ready|error|expired} and the code when ready. Single-use — a ready code is removed on read",
+            "variables": [
+              {
+                "name": "id",
+                "text": "Session id to poll"
+              },
+              {
+                "name": "dir",
+                "text": "Session store directory (default: <tmpdir>/oauth-sessions)",
+                "default": ""
+              }
+            ]
+          }
         }
       ]
     }

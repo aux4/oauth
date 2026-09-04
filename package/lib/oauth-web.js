@@ -22,6 +22,9 @@
  */
 
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 
 function base64url(buffer) {
   return Buffer.from(buffer)
@@ -326,6 +329,103 @@ function applyMap(profile, map) {
   return principal;
 }
 
+// --- OAuth broker session store (hosted-callback + poll) ---
+//
+// The hosted-callback flow parks the short-lived authorization CODE (never a
+// token) in a per-session file so a polling CLI can pick it up cross-device. The
+// session id is chosen by the CLI and used as a filename, so it MUST be validated
+// to prevent path traversal. Entries are single-use (deleted on first read) and
+// TTL-bounded; the parked code is useless without the PKCE verifier the CLI holds.
+const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,200}$/;
+
+function sessionDir(args) {
+  return args.dir && args.dir !== "" ? args.dir : path.join(os.tmpdir(), "oauth-sessions");
+}
+
+function safeSessionId(id) {
+  if (!id || !SESSION_ID_RE.test(id)) {
+    fail("Error: invalid session id");
+  }
+  return id;
+}
+
+function sessionFile(args) {
+  return path.join(sessionDir(args), safeSessionId(args.id) + ".json");
+}
+
+// Best-effort removal of expired session files so abandoned logins don't pile up.
+function pruneSessions(dir) {
+  let names;
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return;
+  }
+  const now = Date.now();
+  for (const name of names) {
+    if (!name.endsWith(".json")) continue;
+    try {
+      const file = path.join(dir, name);
+      if (now - fs.statSync(file).mtimeMs > SESSION_TTL_MS) fs.unlinkSync(file);
+    } catch {
+      // ignore individual failures
+    }
+  }
+}
+
+function sessionPark(args) {
+  const dir = sessionDir(args);
+  const file = sessionFile(args);
+  const record =
+    args.error && args.error !== ""
+      ? { error: args.error, ts: Date.now() }
+      : { code: args.code || "", ts: Date.now() };
+  if (!record.error && record.code === "") {
+    fail("Error: no code or error to park");
+  }
+  fs.mkdirSync(dir, { recursive: true });
+  pruneSessions(dir);
+  // Atomic write (temp + rename) so a concurrent poll never reads a half-written file.
+  const tmp = file + "." + crypto.randomBytes(6).toString("hex") + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(record), { mode: 0o600 });
+  fs.renameSync(tmp, file);
+  process.stdout.write(JSON.stringify({ status: "parked" }) + "\n");
+}
+
+function sessionPoll(args) {
+  const file = sessionFile(args);
+  let raw;
+  try {
+    raw = fs.readFileSync(file, "utf8");
+  } catch {
+    process.stdout.write(JSON.stringify({ status: "pending" }) + "\n");
+    return;
+  }
+  // Single-use: delete immediately so a code can never be replayed from the store.
+  try {
+    fs.unlinkSync(file);
+  } catch {
+    // ignore
+  }
+  let record;
+  try {
+    record = JSON.parse(raw);
+  } catch {
+    process.stdout.write(JSON.stringify({ status: "pending" }) + "\n");
+    return;
+  }
+  if (!record.ts || Date.now() - record.ts > SESSION_TTL_MS) {
+    process.stdout.write(JSON.stringify({ status: "expired" }) + "\n");
+    return;
+  }
+  if (record.error) {
+    process.stdout.write(JSON.stringify({ status: "error", error: record.error }) + "\n");
+    return;
+  }
+  process.stdout.write(JSON.stringify({ status: "ready", code: record.code }) + "\n");
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const command = argv[0];
@@ -337,6 +437,10 @@ async function main() {
     await exchange(args);
   } else if (command === "refresh") {
     await refresh(args);
+  } else if (command === "session-park") {
+    sessionPark(args);
+  } else if (command === "session-poll") {
+    sessionPoll(args);
   } else {
     fail(`Error: unknown subcommand '${command || ""}'`);
   }
