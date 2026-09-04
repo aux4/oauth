@@ -1,14 +1,25 @@
-# aux4/oauth 0.1.5
+# aux4/oauth 0.1.6
 
 ## Added
 
-- **Broker session store** for the hosted-callback + poll login flow:
-  - `aux4 oauth session park --id <id> --code <code>|--error <err>` — park the result of an OAuth redirect for a pending login.
-  - `aux4 oauth session poll --id <id>` — poll it; returns `{status: pending|ready|error|expired}` and the code when ready.
+- **Shared session store for the broker.** `oauth session park` / `oauth session poll`
+  now persist parked authorization codes through the aux4 cloud-file-sync mint
+  endpoint (`CLOUD_SYNC_URL` + `CLOUD_SYNC_TOKEN`) when those are present, so a
+  multi-instance (Lambda-backed) broker shares one store: a code parked by the
+  instance that handled the provider callback is visible to the instance that
+  serves the poll. Falls back to a local file when the sync env is absent.
+- Session objects live under `OAUTH_SESSION_PREFIX` (default `oauth-sessions`),
+  a sibling of the platform's `state/` tree.
 
-  It parks a short-lived authorization **code** (never a token), keyed by an unguessable session id, so a polling CLI can pick it up from any device. Single-use (removed on read), TTL-bounded (10 min), and the session id is strictly validated (`[A-Za-z0-9_-]{16,200}`) since it is used as a filename — path traversal is rejected.
+## Changed
+
+- **Poll deletes expired records.** In addition to single-use deletion on a
+  successful read, an expired record is now removed on poll (both the shared and
+  local backends), so abandoned logins do not linger until the storage lifecycle
+  rule sweeps them.
 
 ## Notes
 
-- Consumed by `aux4/oauth-app`'s `/{provider}/callback` + `/session/{id}` routes for the broker's device-friendly (no-loopback) login. The parked code is useless without the PKCE verifier, which stays on the client.
-- Existing commands (`login`, `token`, `status`, `logout`, `authorize-url`, `exchange`, `refresh`) are unchanged.
+- Session ids are validated (`[A-Za-z0-9_-]{16,200}`) before any path is built,
+  and records are TTL-bounded (10 min); the parked code is useless without the
+  PKCE verifier the CLI holds.
