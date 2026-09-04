@@ -332,12 +332,149 @@ function applyMap(profile, map) {
 // --- OAuth broker session store (hosted-callback + poll) ---
 //
 // The hosted-callback flow parks the short-lived authorization CODE (never a
-// token) in a per-session file so a polling CLI can pick it up cross-device. The
-// session id is chosen by the CLI and used as a filename, so it MUST be validated
+// token) in a per-session record so a polling CLI can pick it up cross-device. The
+// session id is chosen by the CLI and used as a storage key, so it MUST be validated
 // to prevent path traversal. Entries are single-use (deleted on first read) and
 // TTL-bounded; the parked code is useless without the PKCE verifier the CLI holds.
+//
+// Two backends:
+//   - SHARED (default when running on the platform): the broker is a multi-instance
+//     Lambda, so a code parked on instance A must be visible to a poll on instance B.
+//     When CLOUD_SYNC_URL and CLOUD_SYNC_TOKEN are both set we back the store with the
+//     untrusted-VM S3 sync: mint a presigned URL from the control plane, then do the
+//     object op directly against it (see sharedPark/sharedPoll). This is enabled
+//     automatically — those env vars are present on api machines too (only the
+//     automatic state-sync is disabled there, minting still works).
+//   - LOCAL (off-cloud / local dev): the original per-file store under <tmpdir>. Used
+//     whenever the sync env vars are absent, with byte-identical behavior to before.
+//
+// Env vars consumed:
+//   CLOUD_SYNC_URL        control-plane mint endpoint (POST); presence toggles SHARED
+//   CLOUD_SYNC_TOKEN      Bearer token for the mint call; presence toggles SHARED
+//   OAUTH_SESSION_PREFIX  relative-path prefix for session objects (default
+//                         "oauth-sessions"). NOTE: the control plane scopes minted
+//                         paths to the VM's own S3 folder and may restrict which
+//                         prefixes are allowed outside the default `state` tree —
+//                         this needs validation against the live mint endpoint.
 const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,200}$/;
+
+// SHARED store is used when the platform's sync env is present; otherwise LOCAL files.
+function sharedStoreEnabled() {
+  return Boolean(process.env.CLOUD_SYNC_URL) && Boolean(process.env.CLOUD_SYNC_TOKEN);
+}
+
+// Relative object path for a session, under the configurable prefix. The id is
+// validated by safeSessionId before this is called, so it is path-traversal safe.
+function sessionRelPath(id) {
+  const prefix = process.env.OAUTH_SESSION_PREFIX || "oauth-sessions";
+  return `${prefix}/${id}.json`;
+}
+
+// Ask the control plane to sign a batch of operations. Mirrors the cloud-file-sync
+// mint contract: POST { operations:[{method,path}] } with a Bearer token, get back
+// { urls:[{method,path,url}] }. Returns a Map "METHOD <path>" -> presigned url. The
+// actual object op is then run against the url with NO Authorization header (the
+// presigned url is self-authenticating; sending auth can make S3 reject it).
+async function mintSyncUrls(operations) {
+  const res = await fetch(process.env.CLOUD_SYNC_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.CLOUD_SYNC_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ operations })
+  });
+  if (!res.ok) {
+    throw new Error(`mint failed: HTTP ${res.status}`);
+  }
+  const parsed = JSON.parse(await res.text());
+  const map = new Map();
+  for (const entry of parsed.urls || []) {
+    map.set(`${entry.method} ${entry.path}`, entry.url);
+  }
+  return map;
+}
+
+// SHARED park: mint a PUT and write the record to the presigned url. Throws on any
+// failure so the caller (sessionPark) can surface a non-zero exit to the callback route.
+async function sharedPark(id, record) {
+  const rel = sessionRelPath(id);
+  const urls = await mintSyncUrls([{ method: "PUT", path: rel }]);
+  const url = urls.get(`PUT ${rel}`);
+  if (!url) {
+    throw new Error("mint did not return a PUT url");
+  }
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(record)
+  });
+  if (!res.ok) {
+    throw new Error(`park PUT failed: HTTP ${res.status}`);
+  }
+}
+
+// SHARED poll: mint a GET, fetch the record; 404/403/missing -> pending. On a valid,
+// unexpired record, mint a DELETE and remove it (single-use) before returning. Any
+// mint/HTTP failure degrades to `pending` so a poll never crashes or 500s the caller.
+// Best-effort removal of a shared (S3-via-mint) session object. Swallows every
+// error so a poll never crashes on a delete failure — callers treat it as fire.
+async function deleteShared(rel) {
+  try {
+    const delUrls = await mintSyncUrls([{ method: "DELETE", path: rel }]);
+    const delUrl = delUrls.get(`DELETE ${rel}`);
+    if (delUrl) {
+      await fetch(delUrl, { method: "DELETE" });
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function sharedPoll(id) {
+  const rel = sessionRelPath(id);
+  let getUrls;
+  try {
+    getUrls = await mintSyncUrls([{ method: "GET", path: rel }]);
+  } catch {
+    return { status: "pending" };
+  }
+  const getUrl = getUrls.get(`GET ${rel}`);
+  if (!getUrl) {
+    return { status: "pending" };
+  }
+  let res;
+  try {
+    res = await fetch(getUrl, { method: "GET" });
+  } catch {
+    return { status: "pending" };
+  }
+  // Not-yet-parked (404) or a not-found key surfaced as forbidden (403) -> still pending.
+  if (res.status === 404 || res.status === 403 || !res.ok) {
+    return { status: "pending" };
+  }
+  let record;
+  try {
+    record = JSON.parse(await res.text());
+  } catch {
+    return { status: "pending" };
+  }
+  if (!record.ts || Date.now() - record.ts > SESSION_TTL_MS) {
+    // Expired: remove the orphan so an abandoned login does not linger until the
+    // control-plane lifecycle rule sweeps it. Best-effort — a failed delete is
+    // harmless (the record is TTL-bounded and the lifecycle rule is the backstop).
+    await deleteShared(rel);
+    return { status: "expired" };
+  }
+  // Single-use: delete before returning so the code can never be replayed. Best-effort
+  // — a failed delete still returns the code (the record is TTL-bounded regardless).
+  await deleteShared(rel);
+  if (record.error) {
+    return { status: "error", error: record.error };
+  }
+  return { status: "ready", code: record.code };
+}
 
 function sessionDir(args) {
   return args.dir && args.dir !== "" ? args.dir : path.join(os.tmpdir(), "oauth-sessions");
@@ -374,9 +511,8 @@ function pruneSessions(dir) {
   }
 }
 
-function sessionPark(args) {
-  const dir = sessionDir(args);
-  const file = sessionFile(args);
+async function sessionPark(args) {
+  const id = safeSessionId(args.id);
   const record =
     args.error && args.error !== ""
       ? { error: args.error, ts: Date.now() }
@@ -384,6 +520,20 @@ function sessionPark(args) {
   if (!record.error && record.code === "") {
     fail("Error: no code or error to park");
   }
+
+  if (sharedStoreEnabled()) {
+    // A park failure must surface a non-zero exit so the callback route reports it.
+    try {
+      await sharedPark(id, record);
+    } catch (error) {
+      fail(`Error: failed to park session: ${error.message}`);
+    }
+    process.stdout.write(JSON.stringify({ status: "parked" }) + "\n");
+    return;
+  }
+
+  const dir = sessionDir(args);
+  const file = sessionFile(args);
   fs.mkdirSync(dir, { recursive: true });
   pruneSessions(dir);
   // Atomic write (temp + rename) so a concurrent poll never reads a half-written file.
@@ -393,7 +543,20 @@ function sessionPark(args) {
   process.stdout.write(JSON.stringify({ status: "parked" }) + "\n");
 }
 
-function sessionPoll(args) {
+async function sessionPoll(args) {
+  if (sharedStoreEnabled()) {
+    const id = safeSessionId(args.id);
+    let result;
+    try {
+      result = await sharedPoll(id);
+    } catch {
+      // Belt-and-suspenders: a poll must never crash or 500 the caller.
+      result = { status: "pending" };
+    }
+    process.stdout.write(JSON.stringify(result) + "\n");
+    return;
+  }
+
   const file = sessionFile(args);
   let raw;
   try {
@@ -438,9 +601,9 @@ async function main() {
   } else if (command === "refresh") {
     await refresh(args);
   } else if (command === "session-park") {
-    sessionPark(args);
+    await sessionPark(args);
   } else if (command === "session-poll") {
-    sessionPoll(args);
+    await sessionPoll(args);
   } else {
     fail(`Error: unknown subcommand '${command || ""}'`);
   }

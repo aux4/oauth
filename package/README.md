@@ -305,7 +305,43 @@ config:
       login: username
 ```
 
+### Session store (hosted-callback + poll)
+
+The `session park` and `session poll` commands are the server-side primitives behind the broker's hosted-callback + poll login. A polling CLI picks a random session id; the hosted callback route `park`s the short-lived authorization **code** (never a token) under that id; the CLI `poll`s until the code is ready and completes the exchange itself with the PKCE verifier it alone holds.
+
+- Records are **single-use** — a `ready` code is removed on the first successful read.
+- Records are **TTL-bounded** — they expire after 10 minutes.
+- The session id is used as a storage key and is strictly validated (`[A-Za-z0-9_-]`, 16–200 chars) to be path-traversal safe.
+- The parked value is only ever a `code` or an `error`, never a token.
+
+**Two backends, selected automatically:**
+
+- **Shared store** — used when both `CLOUD_SYNC_URL` and `CLOUD_SYNC_TOKEN` are set (the platform's untrusted-VM S3 sync). The broker runs as a multi-instance Lambda, so a code parked on one instance must be visible to a poll on another. Each op mints a presigned URL from the control plane (`POST $CLOUD_SYNC_URL` with a Bearer token, body `{"operations":[{"method","path"}]}`) and then does the object PUT/GET/DELETE directly against the presigned URL. Objects live under `<OAUTH_SESSION_PREFIX>/<id>.json` (default prefix `oauth-sessions`).
+- **Local files** — the fallback for off-cloud / local use when those env vars are absent. A per-session file under `--dir` (default `<tmpdir>/oauth-sessions`).
+
+```bash
+# On the hosted callback (parks the code for the waiting CLI):
+aux4 oauth session park --id <sessionId> --code <authCode>
+
+# From the polling CLI (returns pending until ready, then the code once):
+aux4 oauth session poll --id <sessionId>
+```
+
+`park` prints `{"status":"parked"}` (and exits non-zero if the store write fails, so the callback route can report it). `poll` prints one of:
+
+```json
+{"status":"pending"}
+{"status":"ready","code":"<authCode>"}
+{"status":"error","error":"access_denied"}
+{"status":"expired"}
+```
+
+A poll never fails on a transient store/network error — it degrades to `{"status":"pending"}` so the caller simply polls again.
+
 ## Environment Variables
 
 - `OAUTH_CLIENT_ID` — default for `--clientId`.
 - `OAUTH_CLIENT_SECRET` — default for `--clientSecret`.
+- `CLOUD_SYNC_URL` — control-plane mint endpoint. When set together with `CLOUD_SYNC_TOKEN`, the session store uses the shared (cloud) backend instead of local files.
+- `CLOUD_SYNC_TOKEN` — Bearer token for the mint call. Required (with `CLOUD_SYNC_URL`) to enable the shared session store.
+- `OAUTH_SESSION_PREFIX` — relative-path prefix for shared session objects (default `oauth-sessions`).
