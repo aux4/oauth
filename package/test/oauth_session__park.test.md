@@ -67,6 +67,13 @@ rejects any request that carries an `Authorization` header, so a successful
 round-trip proves the presigned op is sent WITHOUT auth. One already-expired record
 is pre-seeded so the TTL branch can be asserted.
 
+The mock also models S3's signed-header rule for object tagging: a park PUT mints a
+URL that signs `x-amz-tagging=oauth-session=true`, and the object handler rejects
+(403) a PUT whose `x-amz-tagging` header does not byte-match the signed value (or is
+sent on an unsigned URL). So the shared-store park below succeeding proves oauth-web
+sends the tag header that the mint signed — the lifecycle rule can then sweep orphans
+tagged `oauth-session=true`.
+
 ```beforeAll
 nohup node mock-sync-server.js >/dev/null 2>&1 &
 sleep 1

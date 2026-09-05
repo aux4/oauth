@@ -372,8 +372,10 @@ function sessionRelPath(id) {
 }
 
 // Ask the control plane to sign a batch of operations. Mirrors the cloud-file-sync
-// mint contract: POST { operations:[{method,path}] } with a Bearer token, get back
-// { urls:[{method,path,url}] }. Returns a Map "METHOD <path>" -> presigned url. The
+// mint contract: POST { operations:[{method,path[,tags]}] } with a Bearer token, get
+// back { urls:[{method,path,url}] }. An optional `tags` on a PUT op asks the mint to
+// sign x-amz-tagging so the caller may send that header (see sharedPark). Returns a
+// Map "METHOD <path>" -> presigned url. The
 // actual object op is then run against the url with NO Authorization header (the
 // presigned url is self-authenticating; sending auth can make S3 reject it).
 async function mintSyncUrls(operations) {
@@ -396,18 +398,30 @@ async function mintSyncUrls(operations) {
   return map;
 }
 
+// S3 object tag applied to every parked session object so the control-plane bucket
+// lifecycle rule (expire objects tagged oauth-session=true after ~1 day) can sweep
+// orphans the VM can't list/delete itself (parked-never-polled: late approval after
+// CLI timeout, or a callback-page refresh re-parking a copy the CLI already read).
+// The value is signed by the mint endpoint (op.tags) AND sent as the x-amz-tagging
+// header on the PUT; the two MUST be byte-identical or S3 rejects the PUT with 403.
+// Only the PUT is tagged — the DELETE/GET are not (S3 ignores tagging on those).
+const OAUTH_SESSION_TAG = "oauth-session=true";
+
 // SHARED park: mint a PUT and write the record to the presigned url. Throws on any
 // failure so the caller (sessionPark) can surface a non-zero exit to the callback route.
 async function sharedPark(id, record) {
   const rel = sessionRelPath(id);
-  const urls = await mintSyncUrls([{ method: "PUT", path: rel }]);
+  const urls = await mintSyncUrls([{ method: "PUT", path: rel, tags: OAUTH_SESSION_TAG }]);
   const url = urls.get(`PUT ${rel}`);
   if (!url) {
     throw new Error("mint did not return a PUT url");
   }
   const res = await fetch(url, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-amz-tagging": OAUTH_SESSION_TAG
+    },
     body: JSON.stringify(record)
   });
   if (!res.ok) {
