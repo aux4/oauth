@@ -172,7 +172,7 @@ Options:
 - `--provider` — Provider name / config key (required).
 - `--clientId` — OAuth client ID (also `OAUTH_CLIENT_ID`) (required).
 - `--redirectUri` — Redirect URI registered with the provider (required).
-- `--scopes` — Comma-separated scopes (flag > user config > bundled).
+- `--scopes` — Scopes separated by commas and/or spaces. The emitted `scope` parameter is always space-delimited per RFC 6749 §3.3 (a comma-joined `scope` is rejected by providers such as Google); duplicates are removed (flag > user config > bundled).
 - `--state` — Opaque state value (generated as base64url random if omitted).
 - `--authUrl` — Authorization endpoint URL (flag > user config > bundled).
 - `--configFile` — Path to a user `config.yaml` with per-provider settings.

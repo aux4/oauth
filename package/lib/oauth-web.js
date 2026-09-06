@@ -79,6 +79,25 @@ function clientAuth(clientId, clientSecret, clientSecretIn) {
   return { header: {}, bodySecret: clientSecret !== "" };
 }
 
+// Normalize a scopes string for the OAuth `scope` query parameter. The OAuth2
+// spec (RFC 6749 §3.3) requires `scope` to be a space-delimited list, and
+// Google rejects a comma-joined value with an invalid-request page. Callers may
+// pass scopes separated by commas and/or whitespace (e.g. "a,b c" or "a, b ,c");
+// this splits on any run of whitespace and/or commas, drops empty entries,
+// de-duplicates while preserving order, and joins with a single space.
+function normalizeScopes(scopes) {
+  const seen = new Set();
+  const result = [];
+  for (const scope of scopes.split(/[\s,]+/)) {
+    if (scope === "" || seen.has(scope)) {
+      continue;
+    }
+    seen.add(scope);
+    result.push(scope);
+  }
+  return result.join(" ");
+}
+
 function pkce() {
   const codeVerifier = base64url(crypto.randomBytes(32));
   const codeChallenge = base64url(
@@ -91,7 +110,7 @@ function authorizeUrl(args) {
   const authUrl = requireArg(args, "authUrl", "authorize-url");
   const clientId = requireArg(args, "clientId", "authorize-url");
   const redirectUri = requireArg(args, "redirectUri", "authorize-url");
-  const scopes = args.scopes || "";
+  const scopes = normalizeScopes(args.scopes || "");
 
   const { codeVerifier, codeChallenge } = pkce();
   const state =

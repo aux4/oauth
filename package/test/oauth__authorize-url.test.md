@@ -15,7 +15,7 @@ aux4 oauth authorize-url --provider acme --authUrl https://acme.example/authoriz
 ```
 
 ```expect:partial
-{"url":"https://acme.example/authorize?response_type=code&client_id=ACMEID&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback&scope=openid%2Cemail&state=mystate123&code_challenge=**code_challenge_method=S256"**"state":"mystate123"}
+{"url":"https://acme.example/authorize?response_type=code&client_id=ACMEID&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback&scope=openid+email&state=mystate123&code_challenge=**code_challenge_method=S256"**"state":"mystate123"}
 ```
 
 ### should generate a random state when none is supplied
@@ -73,7 +73,7 @@ aux4 oauth authorize-url --provider aux4 --clientId AUX4ID --redirectUri https:/
 ```
 
 ```expect:partial
-{"url":"https://sso.aux4.io/authorize?response_type=code&client_id=AUX4ID**scope=openid%2Cemail%2Cprofile**code_challenge_method=S256"**}
+{"url":"https://sso.aux4.io/authorize?response_type=code&client_id=AUX4ID**scope=openid+email+profile**code_challenge_method=S256"**}
 ```
 
 ## user config resolution
@@ -93,7 +93,7 @@ aux4 oauth authorize-url --provider myco --configFile config.yaml --clientId MYC
 ```
 
 ```expect:partial
-{"url":"https://myco.example/authorize?response_type=code&client_id=MYCOID**scope=openid%2Cprofile**}
+{"url":"https://myco.example/authorize?response_type=code&client_id=MYCOID**scope=openid+profile**}
 ```
 
 ### should let an explicit flag override the user config value
@@ -116,6 +116,53 @@ aux4 oauth authorize-url --provider aux4 --clientId AUX4ID --redirectUri https:/
 
 ```expect:partial
 {"url":"https://sso.aux4.io/authorize?response_type=code&client_id=AUX4ID&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback&scope=openid&state=s4&**}
+```
+
+## scope delimiter normalization
+
+The OAuth2 spec requires the `scope` parameter to be space-delimited, and Google
+rejects a comma-joined value. The builder accepts scopes separated by commas
+and/or whitespace and always emits a single-space-joined `scope` (URL-encoded as
+`+`), de-duplicating repeated scopes.
+
+### should normalize comma-separated scopes to a single space
+
+```execute
+aux4 oauth authorize-url --provider acme --authUrl https://acme.example/authorize --clientId ACMEID --redirectUri https://app.example/callback --scopes "https://www.googleapis.com/auth/drive,openid,email" --state s | node -e 'const o=JSON.parse(require("fs").readFileSync(0,"utf8"));console.log(new URL(o.url).searchParams.get("scope"))'
+```
+
+```expect
+https://www.googleapis.com/auth/drive openid email
+```
+
+### should normalize space-separated scopes to the same result
+
+```execute
+aux4 oauth authorize-url --provider acme --authUrl https://acme.example/authorize --clientId ACMEID --redirectUri https://app.example/callback --scopes "https://www.googleapis.com/auth/drive openid email" --state s | node -e 'const o=JSON.parse(require("fs").readFileSync(0,"utf8"));console.log(new URL(o.url).searchParams.get("scope"))'
+```
+
+```expect
+https://www.googleapis.com/auth/drive openid email
+```
+
+### should collapse mixed commas and whitespace and drop empty entries
+
+```execute
+aux4 oauth authorize-url --provider acme --authUrl https://acme.example/authorize --clientId ACMEID --redirectUri https://app.example/callback --scopes "openid, email ,profile" --state s | node -e 'const o=JSON.parse(require("fs").readFileSync(0,"utf8"));console.log(new URL(o.url).searchParams.get("scope"))'
+```
+
+```expect
+openid email profile
+```
+
+### should de-duplicate repeated scopes preserving order
+
+```execute
+aux4 oauth authorize-url --provider acme --authUrl https://acme.example/authorize --clientId ACMEID --redirectUri https://app.example/callback --scopes "openid,email,openid" --state s | node -e 'const o=JSON.parse(require("fs").readFileSync(0,"utf8"));console.log(new URL(o.url).searchParams.get("scope"))'
+```
+
+```expect
+openid email
 ```
 
 ## missing-URL error path

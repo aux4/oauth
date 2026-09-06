@@ -15,6 +15,10 @@ The command:
 - Builds the authorize URL with `response_type=code`, `client_id`,
   `redirect_uri`, `scope`, `state`, `code_challenge`, and
   `code_challenge_method=S256`.
+- Normalizes the `scope` value: input scopes may be separated by commas and/or
+  whitespace, but the emitted `scope` parameter is always a single-space-delimited
+  list (as required by RFC 6749 §3.3 — a comma-joined `scope` is rejected by
+  providers such as Google). Empty entries are dropped and duplicates removed.
 
 The authorization endpoint URL and scopes are resolved with this precedence:
 
@@ -46,7 +50,7 @@ aux4 oauth authorize-url --provider <name> --clientId <id> --redirectUri <url> \
 --provider     Provider name / config key (required). Use `aux4` for the bundled aux4 SSO URLs
 --clientId     OAuth client ID (flag or env `OAUTH_CLIENT_ID`) (required)
 --redirectUri  Redirect URI registered with the provider (required)
---scopes       Comma-separated scopes (flag > user config > bundled config)
+--scopes       Scopes separated by commas and/or spaces; emitted space-delimited (flag > user config > bundled config)
 --state        Opaque state value (generated as base64url random if omitted)
 --authUrl      Authorization endpoint URL (flag > user config > bundled config)
 --configFile   Path to a user `config.yaml` with per-provider URLs/scopes
@@ -63,7 +67,7 @@ aux4 oauth authorize-url --provider aux4 \
 ```
 
 ```text
-{"url":"https://sso.aux4.io/authorize?response_type=code&client_id=abc123&redirect_uri=https%3A%2F%2Fapp.example%2Fauth%2Fcallback&scope=openid%2Cemail%2Cprofile&state=Yk3...&code_challenge=VNv40bf7...&code_challenge_method=S256","codeVerifier":"IX1jAHuH...","state":"Yk3..."}
+{"url":"https://sso.aux4.io/authorize?response_type=code&client_id=abc123&redirect_uri=https%3A%2F%2Fapp.example%2Fauth%2Fcallback&scope=openid+email+profile&state=Yk3...&code_challenge=VNv40bf7...&code_challenge_method=S256","codeVerifier":"IX1jAHuH...","state":"Yk3..."}
 ```
 
 Build an authorize URL for any other provider by supplying its endpoint:
